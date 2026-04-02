@@ -10,7 +10,7 @@
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 0; color: #333; }
         
         /* Навигация и профиль */
-        .header { background: var(--primary); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
+        .header { background: var(--primary); color: white; padding: 15px 20px; display: none; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
         .user-info { font-size: 14px; background: rgba(255,255,255,0.1); padding: 8px 15px; border-radius: 8px; }
         .logout-btn { background: #c0392b; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
         
@@ -32,9 +32,10 @@
         th { background: #f8f9fa; color: #666; text-transform: uppercase; font-size: 12px; }
         .expired { color: #d32f2f; font-weight: bold; background: #ffebee; padding: 2px 5px; border-radius: 4px; }
         
-        /* Скрытие секций */
-        .section { display: none; }
-        .active-section { display: block; }
+        /* Скрытие секций - добавлено !important для надежности */
+        .section { display: none !important; }
+        .active-section { display: block !important; }
+        .header.active-section { display: flex !important; }
         
         /* Логин экран */
         #loginSection { max-width: 400px; margin: 100px auto; text-align: center; }
@@ -43,7 +44,7 @@
 </head>
 <body>
 
-<div id="loginSection" class="container active-section">
+<div id="loginSection" class="container section">
     <h2>🧯 Вход в систему</h2>
     <input type="text" id="loginEmail" placeholder="Логин (например: admin)">
     <input type="password" id="loginPass" placeholder="Пароль">
@@ -51,7 +52,7 @@
     <p id="loginHint" style="font-size: 12px; color: #666; margin-top: 10px;"></p>
 </div>
 
-<div id="appHeader" class="header section">
+<div id="appHeader" class="header">
     <div style="font-weight: bold; font-size: 18px;">Реестр Огнетушителей</div>
     <div class="user-info" id="userInfoDisplay">Загрузка...</div>
     <button class="logout-btn" onclick="signOut()">Выйти</button>
@@ -168,18 +169,15 @@
         
         if (!session) {
             switchSection('loginSection');
-            document.getElementById('appHeader').classList.remove('active-section');
             return;
         }
 
-        // ЛОГИ ДЛЯ ОТЛАДКИ (нажми F12 в браузере)
-        console.log("Успешный вход! Ваш UID:", session.user.id);
-
+        // Исправлено: таблица 'acc' строчными буквами
         const { data: profile, error } = await _db.from('acc').select('*').eq('id', session.user.id).single();
         
         if (error || !profile) {
-            console.error("Профиль не найден в таблице ACC. Ошибка базы:", error);
-            alert("Ваш профиль не найден в таблице ACC.\n\nПроверьте в Supabase, что в таблице ACC есть строка с ID: " + session.user.id);
+            console.error("Профиль не найден в таблице acc:", error);
+            alert("Ваш профиль не найден. Обратитесь к администратору.\nID: " + session.user.id);
             signOut();
             return;
         }
@@ -204,8 +202,17 @@
     }
 
     function switchSection(sectionId) {
+        // Скрываем все контейнеры-секции
         document.querySelectorAll('.section').forEach(el => el.classList.remove('active-section'));
-        document.getElementById(sectionId).classList.add('active-section');
+        
+        // Показываем нужный
+        const target = document.getElementById(sectionId);
+        if(target) target.classList.add('active-section');
+
+        // Если это логин — прячем шапку
+        if (sectionId === 'loginSection') {
+            document.getElementById('appHeader').classList.remove('active-section');
+        }
     }
 
     async function signOut() {
@@ -214,7 +221,7 @@
         location.reload(); 
     }
 
-    // --- Остальные функции (Админка, Начальник, Инспектор) остаются без изменений ---
+    // --- АДМИНКА ---
     async function addDepartment() {
         const name = document.getElementById('newDeptName').value.trim();
         const type = document.getElementById('newDeptType').value;
@@ -255,6 +262,7 @@
         if (error) return alert("Ошибка регистрации: " + error.message);
 
         if (data.user) {
+            // Исправлено: таблица 'acc'
             const { error: accError } = await _db.from('acc').insert([{
                 id: data.user.id,
                 username: login,
@@ -269,6 +277,7 @@
         }
     }
 
+    // --- НАЧАЛЬНИК ЦЕХА ---
     async function saveExtinguisher() {
         const serial = document.getElementById('extSerial').value;
         if(!serial) return alert("Введите инвентарный номер!");
@@ -296,6 +305,7 @@
         renderTable('headTableBody', data, false);
     }
 
+    // --- ИНСПЕКТОР ---
     async function loadDeptsForInspector() {
         const { data } = await _db.from('Depts').select('name');
         if(data) {
@@ -305,7 +315,8 @@
 
     async function loadInspectorTable() {
         const search = document.getElementById('inspectorSearch').value.trim();
-        let query = _db.from('Ognetush').select('*, ACC(full_name, phone)').order('next_check_date');
+        // В селекте тоже заменено на 'acc'
+        let query = _db.from('Ognetush').select('*, acc(full_name, phone)').order('next_check_date');
         if (search) query = query.ilike('shop_name', `%${search}%`);
         const { data, error } = await query;
         renderTable('inspectorTableBody', data, true);
@@ -329,7 +340,9 @@
                 <td class="${isExp ? 'expired' : ''}">${item.next_check_date || 'Не указан'}</td>
             `;
             if(isInspector) {
-                const author = item.ACC ? `${item.ACC.full_name}<br><small>📞 ${item.ACC.phone}</small>` : '—';
+                // Обработка данных из присоединенной таблицы 'acc'
+                const authorData = item.acc || item.ACC; 
+                const author = authorData ? `${authorData.full_name}<br><small>📞 ${authorData.phone}</small>` : '—';
                 row += `<td>${author}</td>`;
             } else {
                 row += `<td>${isExp ? '❌ Нужна проверка' : '✅ Ок'}</td>`;
@@ -339,7 +352,8 @@
         });
     }
 
-    checkSession();
+    // Запуск после загрузки DOM
+    document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
 </html>
