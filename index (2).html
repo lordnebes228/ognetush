@@ -175,7 +175,7 @@
         // ЛОГИ ДЛЯ ОТЛАДКИ (нажми F12 в браузере)
         console.log("Успешный вход! Ваш UID:", session.user.id);
 
-        const { data: profile, error } = await _db.from('ACC').select('*').eq('id', session.user.id).single();
+        const { data: profile, error } = await _db.from('acc').select('*').eq('id', session.user.id).single();
         
         if (error || !profile) {
             console.error("Профиль не найден в таблице ACC. Ошибка базы:", error);
