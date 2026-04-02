@@ -151,18 +151,13 @@
         let login = document.getElementById('loginEmail').value.trim();
         if(!login) return alert("Введите логин");
         
-        // Автоматически добавляем домен, если его нет
         if(!login.includes('@')) login += "@ssk.local";
         const pass = document.getElementById('loginPass').value;
 
         const { data, error } = await _db.auth.signInWithPassword({ email: login, password: pass });
         
         if (error) {
-            if (error.message.includes("Email not confirmed")) {
-                alert("ОШИБКА: Почта не подтверждена в Supabase!\n\n1. Зайдите в Supabase -> Authentication -> Users\n2. Напротив вашего пользователя нажмите 3 точки -> Confirm User.");
-            } else {
-                alert("Ошибка входа: " + error.message);
-            }
+            alert("Ошибка входа: " + error.message);
             return;
         }
         checkSession();
@@ -177,10 +172,14 @@
             return;
         }
 
+        // ЛОГИ ДЛЯ ОТЛАДКИ (нажми F12 в браузере)
+        console.log("Успешный вход! Ваш UID:", session.user.id);
+
         const { data: profile, error } = await _db.from('ACC').select('*').eq('id', session.user.id).single();
         
-        if (!profile || error) {
-            alert("Ваш профиль не найден в таблице ACC. Обратитесь к администратору.");
+        if (error || !profile) {
+            console.error("Профиль не найден в таблице ACC. Ошибка базы:", error);
+            alert("Ваш профиль не найден в таблице ACC.\n\nПроверьте в Supabase, что в таблице ACC есть строка с ID: " + session.user.id);
             signOut();
             return;
         }
@@ -215,7 +214,7 @@
         location.reload(); 
     }
 
-    // --- АДМИНКА ---
+    // --- Остальные функции (Админка, Начальник, Инспектор) остаются без изменений ---
     async function addDepartment() {
         const name = document.getElementById('newDeptName').value.trim();
         const type = document.getElementById('newDeptType').value;
@@ -247,7 +246,6 @@
 
         if(!login || !pass || !fname) return alert("Заполните Логин, Пароль и ФИО!");
 
-        // 1. Создаем в Auth
         const { data, error } = await _db.auth.signUp({ 
             email: login + "@ssk.local", 
             password: pass,
@@ -256,7 +254,6 @@
 
         if (error) return alert("Ошибка регистрации: " + error.message);
 
-        // 2. Создаем в ACC
         if (data.user) {
             const { error: accError } = await _db.from('ACC').insert([{
                 id: data.user.id,
@@ -268,11 +265,10 @@
             }]);
             
             if(accError) alert("Ошибка создания профиля: " + accError.message);
-            else alert("Пользователь " + login + " создан!\nВАЖНО: Если вход не работает, подтвердите его в панели Supabase.");
+            else alert("Пользователь " + login + " создан!");
         }
     }
 
-    // --- НАЧАЛЬНИК ---
     async function saveExtinguisher() {
         const serial = document.getElementById('extSerial').value;
         if(!serial) return alert("Введите инвентарный номер!");
@@ -300,7 +296,6 @@
         renderTable('headTableBody', data, false);
     }
 
-    // --- ИНСПЕКТОР ---
     async function loadDeptsForInspector() {
         const { data } = await _db.from('Depts').select('name');
         if(data) {
@@ -310,17 +305,12 @@
 
     async function loadInspectorTable() {
         const search = document.getElementById('inspectorSearch').value.trim();
-        // Используем связь с таблицей ACC для получения ФИО
         let query = _db.from('Ognetush').select('*, ACC(full_name, phone)').order('next_check_date');
-        
         if (search) query = query.ilike('shop_name', `%${search}%`);
-
         const { data, error } = await query;
-        if(error) console.error(error);
         renderTable('inspectorTableBody', data, true);
     }
 
-    // --- ОБЩИЙ РЕНДЕР ---
     function renderTable(tbodyId, data, isInspector) {
         const tbody = document.getElementById(tbodyId);
         tbody.innerHTML = '';
@@ -328,23 +318,18 @@
             tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Данных пока нет</td></tr>';
             return;
         }
-        
         const today = new Date();
-
         data.forEach(item => {
             const nextDate = item.next_check_date ? new Date(item.next_check_date) : null;
             const isExp = nextDate && nextDate < today;
-            
             let row = `<tr>`;
             if(isInspector) row += `<td><b>${item.shop_name}</b></td>`;
-            
             row += `
                 <td><b>${item.type}</b> (№${item.serial_number || '—'})<br><small>${item.location || ''}</small></td>
                 <td class="${isExp ? 'expired' : ''}">${item.next_check_date || 'Не указан'}</td>
             `;
-
             if(isInspector) {
-                const author = item.ACC ? `${item.ACC.full_name}<br><small>📞 ${item.ACC.phone}</small>` : '<span style="color:#999">Неизвестно</span>';
+                const author = item.ACC ? `${item.ACC.full_name}<br><small>📞 ${item.ACC.phone}</small>` : '—';
                 row += `<td>${author}</td>`;
             } else {
                 row += `<td>${isExp ? '❌ Нужна проверка' : '✅ Ок'}</td>`;
