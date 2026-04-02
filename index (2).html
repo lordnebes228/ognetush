@@ -255,7 +255,7 @@
         if (error) return alert("Ошибка регистрации: " + error.message);
 
         if (data.user) {
-            const { error: accError } = await _db.from('ACC').insert([{
+            const { error: accError } = await _db.from('acc').insert([{
                 id: data.user.id,
                 username: login,
                 full_name: fname,
