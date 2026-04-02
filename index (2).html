@@ -32,7 +32,7 @@
         th { background: #f8f9fa; color: #666; text-transform: uppercase; font-size: 12px; }
         .expired { color: #d32f2f; font-weight: bold; background: #ffebee; padding: 2px 5px; border-radius: 4px; }
         
-        /* Скрытие секций - добавлено !important для надежности */
+        /* Скрытие секций */
         .section { display: none !important; }
         .active-section { display: block !important; }
         .header.active-section { display: flex !important; }
@@ -49,7 +49,6 @@
     <input type="text" id="loginEmail" placeholder="Логин (например: admin)">
     <input type="password" id="loginPass" placeholder="Пароль">
     <button style="background: var(--primary); width: 100%;" onclick="signIn()">ВОЙТИ</button>
-    <p id="loginHint" style="font-size: 12px; color: #666; margin-top: 10px;"></p>
 </div>
 
 <div id="appHeader" class="header">
@@ -60,7 +59,6 @@
 
 <div id="adminSection" class="container section">
     <h2>🛠 Панель Администратора</h2>
-    
     <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
         <h3>Добавить Подразделение</h3>
         <div style="display:flex; gap:10px;">
@@ -69,7 +67,6 @@
             <button class="btn-admin" onclick="addDepartment()">Добавить</button>
         </div>
     </div>
-
     <div style="background: #f0f7ff; padding: 15px; border-radius: 8px;">
         <h3>Создать аккаунт сотрудника</h3>
         <div class="form-grid">
@@ -95,10 +92,7 @@
             <label>Ваше подразделение:</label>
             <input type="text" id="headDeptDisplay" disabled>
         </div>
-        <div class="form-group">
-            <label>Инвентарный номер:</label>
-            <input type="text" id="extSerial" placeholder="Введите номер">
-        </div>
+        <div class="form-group"><label>Инвентарный номер:</label><input type="text" id="extSerial" placeholder="Введите номер"></div>
         <div class="form-group">
             <label>Тип:</label>
             <select id="extType">
@@ -107,21 +101,11 @@
                 <option value="ОУ-5">ОУ-5 (Углекислотный)</option>
             </select>
         </div>
-        <div class="form-group" style="grid-column: span 2;">
-            <label>Место установки:</label>
-            <input type="text" id="extLocation" placeholder="Например: У входа, Щит №2">
-        </div>
-        <div class="form-group">
-            <label>Дата проверки:</label>
-            <input type="date" id="extLastCheck">
-        </div>
-        <div class="form-group">
-            <label>Следующая проверка:</label>
-            <input type="date" id="extNextCheck">
-        </div>
+        <div class="form-group" style="grid-column: span 2;"><label>Место установки:</label><input type="text" id="extLocation" placeholder="Например: У входа, Щит №2"></div>
+        <div class="form-group"><label>Дата проверки:</label><input type="date" id="extLastCheck"></div>
+        <div class="form-group"><label>Следующая проверка:</label><input type="date" id="extNextCheck"></div>
         <button class="btn-save" onclick="saveExtinguisher()">💾 СОХРАНИТЬ В БАЗУ</button>
     </div>
-
     <h3 style="margin-top:40px;">Ваши огнетушители</h3>
     <table>
         <thead><tr><th>Номер/Тип</th><th>Место</th><th>Срок</th><th>Статус</th></tr></thead>
@@ -136,7 +120,6 @@
         <input type="text" id="inspectorSearch" list="deptsDatalist" placeholder="Начните вводить название цеха..." style="width: 100%; margin-top:5px;" oninput="loadInspectorTable()">
         <datalist id="deptsDatalist"></datalist>
     </div>
-
     <table>
         <thead><tr><th>Цех</th><th>Номер/Тип</th><th>Срок</th><th>Добавил (ФИО / Тел)</th></tr></thead>
         <tbody id="inspectorTableBody"></tbody>
@@ -147,43 +130,36 @@
     const _db = supabase.createClient('https://gzjoaohbxehyagostffk.supabase.co', 'sb_publishable_BYWEcHFUU1Z41GtZSzmalA_iFiei8jx');
     let currentUser = null;
 
-    // --- АВТОРИЗАЦИЯ ---
+    // --- ИСПРАВЛЕННЫЕ НАЗВАНИЯ ТАБЛИЦ (все в нижнем регистре) ---
+    const TBL = {
+        ACC: 'acc',
+        DEPTS: 'depts',
+        OGNE: 'ognetush'
+    };
+
     async function signIn() {
         let login = document.getElementById('loginEmail').value.trim();
         if(!login) return alert("Введите логин");
-        
         if(!login.includes('@')) login += "@ssk.local";
         const pass = document.getElementById('loginPass').value;
-
-        const { data, error } = await _db.auth.signInWithPassword({ email: login, password: pass });
-        
-        if (error) {
-            alert("Ошибка входа: " + error.message);
-            return;
-        }
+        const { error } = await _db.auth.signInWithPassword({ email: login, password: pass });
+        if (error) return alert("Ошибка входа: " + error.message);
         checkSession();
     }
 
     async function checkSession() {
         const { data: { session } } = await _db.auth.getSession();
-        
-        if (!session) {
-            switchSection('loginSection');
-            return;
-        }
+        if (!session) return switchSection('loginSection');
 
-        // Исправлено: таблица 'acc' строчными буквами
-        const { data: profile, error } = await _db.from('acc').select('*').eq('id', session.user.id).single();
+        const { data: profile, error } = await _db.from(TBL.ACC).select('*').eq('id', session.user.id).single();
         
         if (error || !profile) {
-            console.error("Профиль не найден в таблице acc:", error);
-            alert("Ваш профиль не найден. Обратитесь к администратору.\nID: " + session.user.id);
-            signOut();
-            return;
+            console.error("Профиль не найден:", error);
+            alert("Ваш профиль не найден в базе. Обратитесь к администратору.");
+            return signOut();
         }
         
         currentUser = profile;
-        
         document.getElementById('appHeader').classList.add('active-section');
         document.getElementById('userInfoDisplay').innerHTML = `👤 ${profile.full_name} | 📞 ${profile.phone} <br><small>[${profile.role} | ${profile.department}]</small>`;
 
@@ -202,22 +178,14 @@
     }
 
     function switchSection(sectionId) {
-        // Скрываем все контейнеры-секции
         document.querySelectorAll('.section').forEach(el => el.classList.remove('active-section'));
-        
-        // Показываем нужный
         const target = document.getElementById(sectionId);
         if(target) target.classList.add('active-section');
-
-        // Если это логин — прячем шапку
-        if (sectionId === 'loginSection') {
-            document.getElementById('appHeader').classList.remove('active-section');
-        }
+        if (sectionId === 'loginSection') document.getElementById('appHeader').classList.remove('active-section');
     }
 
     async function signOut() {
         await _db.auth.signOut();
-        currentUser = null;
         location.reload(); 
     }
 
@@ -226,8 +194,8 @@
         const name = document.getElementById('newDeptName').value.trim();
         const type = document.getElementById('newDeptType').value;
         if(!name) return;
-        const { error } = await _db.from('Depts').insert([{ name, type }]);
-        if(error) alert(error.message);
+        const { error } = await _db.from(TBL.DEPTS).insert([{ name, type }]);
+        if(error) alert("Ошибка добавления цеха: " + error.message);
         else {
             alert("Подразделение добавлено!");
             document.getElementById('newDeptName').value = '';
@@ -236,7 +204,7 @@
     }
 
     async function loadDeptsForAdmin() {
-        const { data } = await _db.from('Depts').select('name').order('name');
+        const { data } = await _db.from(TBL.DEPTS).select('name').order('name');
         if(data) {
             document.getElementById('regDept').innerHTML = '<option value="">-- Выберите подразделение --</option>' + 
                 data.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
@@ -255,15 +223,13 @@
 
         const { data, error } = await _db.auth.signUp({ 
             email: login + "@ssk.local", 
-            password: pass,
-            options: { data: { full_name: fname } } 
+            password: pass
         });
 
         if (error) return alert("Ошибка регистрации: " + error.message);
 
         if (data.user) {
-            // Исправлено: таблица 'acc'
-            const { error: accError } = await _db.from('acc').insert([{
+            const { error: accError } = await _db.from(TBL.ACC).insert([{
                 id: data.user.id,
                 username: login,
                 full_name: fname,
@@ -282,7 +248,7 @@
         const serial = document.getElementById('extSerial').value;
         if(!serial) return alert("Введите инвентарный номер!");
 
-        const payload = {
+        const { error } = await _db.from(TBL.OGNE).insert([{
             shop_name: currentUser.department,
             serial_number: serial,
             type: document.getElementById('extType').value,
@@ -290,35 +256,28 @@
             last_check_date: document.getElementById('extLastCheck').value,
             next_check_date: document.getElementById('extNextCheck').value,
             creator_id: currentUser.id
-        };
+        }]);
 
-        const { error } = await _db.from('Ognetush').insert([payload]);
         if (error) alert('Ошибка сохранения: ' + error.message);
-        else { 
-            alert('Данные внесены!'); 
-            loadHeadTable(); 
-        }
+        else { alert('Данные внесены!'); loadHeadTable(); }
     }
 
     async function loadHeadTable() {
-        const { data } = await _db.from('Ognetush').select('*').eq('shop_name', currentUser.department).order('next_check_date');
+        const { data } = await _db.from(TBL.OGNE).select('*').eq('shop_name', currentUser.department).order('next_check_date');
         renderTable('headTableBody', data, false);
     }
 
     // --- ИНСПЕКТОР ---
     async function loadDeptsForInspector() {
-        const { data } = await _db.from('Depts').select('name');
-        if(data) {
-            document.getElementById('deptsDatalist').innerHTML = data.map(d => `<option value="${d.name}">`).join('');
-        }
+        const { data } = await _db.from(TBL.DEPTS).select('name');
+        if(data) document.getElementById('deptsDatalist').innerHTML = data.map(d => `<option value="${d.name}">`).join('');
     }
 
     async function loadInspectorTable() {
         const search = document.getElementById('inspectorSearch').value.trim();
-        // В селекте тоже заменено на 'acc'
-        let query = _db.from('Ognetush').select('*, acc(full_name, phone)').order('next_check_date');
+        let query = _db.from(TBL.OGNE).select(`*, ${TBL.ACC}(full_name, phone)`).order('next_check_date');
         if (search) query = query.ilike('shop_name', `%${search}%`);
-        const { data, error } = await query;
+        const { data } = await query;
         renderTable('inspectorTableBody', data, true);
     }
 
@@ -340,7 +299,7 @@
                 <td class="${isExp ? 'expired' : ''}">${item.next_check_date || 'Не указан'}</td>
             `;
             if(isInspector) {
-                // Обработка данных из присоединенной таблицы 'acc'
+                // Пытаемся взять данные из вложенного объекта (с учетом возможной разницы в регистре ответа API)
                 const authorData = item.acc || item.ACC; 
                 const author = authorData ? `${authorData.full_name}<br><small>📞 ${authorData.phone}</small>` : '—';
                 row += `<td>${author}</td>`;
@@ -352,7 +311,6 @@
         });
     }
 
-    // Запуск после загрузки DOM
     document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
