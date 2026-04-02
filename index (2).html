@@ -45,9 +45,10 @@
 
 <div id="loginSection" class="container active-section">
     <h2>🧯 Вход в систему</h2>
-    <input type="text" id="loginEmail" placeholder="Логин">
+    <input type="text" id="loginEmail" placeholder="Логин (например: admin)">
     <input type="password" id="loginPass" placeholder="Пароль">
     <button style="background: var(--primary); width: 100%;" onclick="signIn()">ВОЙТИ</button>
+    <p id="loginHint" style="font-size: 12px; color: #666; margin-top: 10px;"></p>
 </div>
 
 <div id="appHeader" class="header section">
@@ -69,14 +70,14 @@
     </div>
 
     <div style="background: #f0f7ff; padding: 15px; border-radius: 8px;">
-        <h3>Создать аккаунт</h3>
+        <h3>Создать аккаунт сотрудника</h3>
         <div class="form-grid">
-            <input type="text" id="regLogin" placeholder="Логин">
+            <input type="text" id="regLogin" placeholder="Логин (английскими)">
             <input type="password" id="regPass" placeholder="Пароль">
             <input type="text" id="regFullName" placeholder="ФИО сотрудника">
             <input type="text" id="regPhone" placeholder="Телефон">
             <select id="regRole">
-                <option value="Начальник">Начальник цеха/отдела (Добавление данных)</option>
+                <option value="Начальник">Начальник цеха (Ввод данных)</option>
                 <option value="Инспектор">Инспектор (Просмотр всего)</option>
                 <option value="Админ">Администратор</option>
             </select>
@@ -131,7 +132,7 @@
     <h2>📋 Общий реестр огнетушителей</h2>
     <div style="background: #e3f2fd; padding: 15px; border-radius: 8px; margin-bottom: 20px;">
         <label style="font-weight: bold;">Поиск по цеху:</label>
-        <input type="text" id="inspectorSearch" list="deptsDatalist" placeholder="Начните вводить название цеха..." style="width: 100%; margin-top:5px;" onchange="loadInspectorTable()">
+        <input type="text" id="inspectorSearch" list="deptsDatalist" placeholder="Начните вводить название цеха..." style="width: 100%; margin-top:5px;" oninput="loadInspectorTable()">
         <datalist id="deptsDatalist"></datalist>
     </div>
 
@@ -142,49 +143,61 @@
 </div>
 
 <script>
-   const _db = supabase.createClient('https://gzjoaohbxehyagostffk.supabase.co', 'sb_publishable_BYWEcHFUU1Z41GtZSzmalA_iFiei8jx');
+    const _db = supabase.createClient('https://gzjoaohbxehyagostffk.supabase.co', 'sb_publishable_BYWEcHFUU1Z41GtZSzmalA_iFiei8jx');
     let currentUser = null;
 
-    // --- АВТОРИЗАЦИЯ И МАРШРУТИЗАЦИЯ ---
+    // --- АВТОРИЗАЦИЯ ---
     async function signIn() {
         let login = document.getElementById('loginEmail').value.trim();
+        if(!login) return alert("Введите логин");
+        
+        // Автоматически добавляем домен, если его нет
         if(!login.includes('@')) login += "@ssk.local";
         const pass = document.getElementById('loginPass').value;
 
         const { data, error } = await _db.auth.signInWithPassword({ email: login, password: pass });
-        if (error) return alert("Ошибка входа: " + error.message);
+        
+        if (error) {
+            if (error.message.includes("Email not confirmed")) {
+                alert("ОШИБКА: Почта не подтверждена в Supabase!\n\n1. Зайдите в Supabase -> Authentication -> Users\n2. Напротив вашего пользователя нажмите 3 точки -> Confirm User.");
+            } else {
+                alert("Ошибка входа: " + error.message);
+            }
+            return;
+        }
         checkSession();
     }
 
     async function checkSession() {
         const { data: { session } } = await _db.auth.getSession();
+        
         if (!session) {
             switchSection('loginSection');
             document.getElementById('appHeader').classList.remove('active-section');
             return;
         }
 
-        // Грузим профиль из таблицы ACC
-        const { data: profile } = await _db.from('ACC').select('*').eq('id', session.user.id).single();
-        if (!profile) return alert("Профиль не найден в таблице ACC!");
+        const { data: profile, error } = await _db.from('ACC').select('*').eq('id', session.user.id).single();
+        
+        if (!profile || error) {
+            alert("Ваш профиль не найден в таблице ACC. Обратитесь к администратору.");
+            signOut();
+            return;
+        }
         
         currentUser = profile;
         
-        // Показываем шапку и данные пользователя
         document.getElementById('appHeader').classList.add('active-section');
-        document.getElementById('userInfoDisplay').innerHTML = `👤 ${profile.full_name || profile.username} | 📞 ${profile.phone || 'Нет тел.'} <br><small>[${profile.role}]</small>`;
+        document.getElementById('userInfoDisplay').innerHTML = `👤 ${profile.full_name} | 📞 ${profile.phone} <br><small>[${profile.role} | ${profile.department}]</small>`;
 
-        // Раскидываем по экранам
         if (profile.role === 'Админ') {
             switchSection('adminSection');
             loadDeptsForAdmin();
-        } 
-        else if (profile.role === 'Начальник') {
+        } else if (profile.role === 'Начальник') {
             switchSection('headSection');
             document.getElementById('headDeptDisplay').value = profile.department;
             loadHeadTable();
-        } 
-        else if (profile.role === 'Инспектор') {
+        } else if (profile.role === 'Инспектор') {
             switchSection('inspectorSection');
             loadDeptsForInspector();
             loadInspectorTable();
@@ -193,31 +206,33 @@
 
     function switchSection(sectionId) {
         document.querySelectorAll('.section').forEach(el => el.classList.remove('active-section'));
-        if(sectionId !== 'loginSection') document.getElementById('appHeader').classList.add('active-section');
         document.getElementById(sectionId).classList.add('active-section');
     }
 
     async function signOut() {
         await _db.auth.signOut();
         currentUser = null;
-        checkSession();
+        location.reload(); 
     }
 
-    // --- ФУНКЦИИ АДМИНА ---
+    // --- АДМИНКА ---
     async function addDepartment() {
         const name = document.getElementById('newDeptName').value.trim();
         const type = document.getElementById('newDeptType').value;
         if(!name) return;
-        await _db.from('Depts').insert([{ name, type }]);
-        alert("Добавлено!");
-        document.getElementById('newDeptName').value = '';
-        loadDeptsForAdmin();
+        const { error } = await _db.from('Depts').insert([{ name, type }]);
+        if(error) alert(error.message);
+        else {
+            alert("Подразделение добавлено!");
+            document.getElementById('newDeptName').value = '';
+            loadDeptsForAdmin();
+        }
     }
 
     async function loadDeptsForAdmin() {
         const { data } = await _db.from('Depts').select('name').order('name');
         if(data) {
-            document.getElementById('regDept').innerHTML = '<option value="">-- Подразделение --</option>' + 
+            document.getElementById('regDept').innerHTML = '<option value="">-- Выберите подразделение --</option>' + 
                 data.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
         }
     }
@@ -230,29 +245,41 @@
         const role = document.getElementById('regRole').value;
         const dept = document.getElementById('regDept').value;
 
-        if(!login || !pass || !fname || !phone) return alert("Заполните все поля!");
+        if(!login || !pass || !fname) return alert("Заполните Логин, Пароль и ФИО!");
 
-        const { data, error } = await _db.auth.signUp({ email: login + "@ssk.local", password: pass });
-        if (error) return alert(error.message);
+        // 1. Создаем в Auth
+        const { data, error } = await _db.auth.signUp({ 
+            email: login + "@ssk.local", 
+            password: pass,
+            options: { data: { full_name: fname } } 
+        });
 
+        if (error) return alert("Ошибка регистрации: " + error.message);
+
+        // 2. Создаем в ACC
         if (data.user) {
-            await _db.from('ACC').insert({
+            const { error: accError } = await _db.from('ACC').insert([{
                 id: data.user.id,
                 username: login,
                 full_name: fname,
                 phone: phone,
                 role: role,
-                department: role === 'Админ' || role === 'Инспектор' ? 'Общий' : dept
-            });
-            alert("Пользователь создан!");
+                department: (role === 'Админ' || role === 'Инспектор') ? 'Общий' : dept
+            }]);
+            
+            if(accError) alert("Ошибка создания профиля: " + accError.message);
+            else alert("Пользователь " + login + " создан!\nВАЖНО: Если вход не работает, подтвердите его в панели Supabase.");
         }
     }
 
-    // --- ФУНКЦИИ НАЧАЛЬНИКА ЦЕХА ---
+    // --- НАЧАЛЬНИК ---
     async function saveExtinguisher() {
+        const serial = document.getElementById('extSerial').value;
+        if(!serial) return alert("Введите инвентарный номер!");
+
         const payload = {
             shop_name: currentUser.department,
-            serial_number: document.getElementById('extSerial').value,
+            serial_number: serial,
             type: document.getElementById('extType').value,
             location: document.getElementById('extLocation').value,
             last_check_date: document.getElementById('extLastCheck').value,
@@ -261,8 +288,11 @@
         };
 
         const { error } = await _db.from('Ognetush').insert([payload]);
-        if (error) alert('Ошибка БД: ' + error.message);
-        else { alert('Сохранено!'); loadHeadTable(); }
+        if (error) alert('Ошибка сохранения: ' + error.message);
+        else { 
+            alert('Данные внесены!'); 
+            loadHeadTable(); 
+        }
     }
 
     async function loadHeadTable() {
@@ -270,7 +300,7 @@
         renderTable('headTableBody', data, false);
     }
 
-    // --- ФУНКЦИИ ИНСПЕКТОРА ---
+    // --- ИНСПЕКТОР ---
     async function loadDeptsForInspector() {
         const { data } = await _db.from('Depts').select('name');
         if(data) {
@@ -280,44 +310,50 @@
 
     async function loadInspectorTable() {
         const search = document.getElementById('inspectorSearch').value.trim();
-        let query = _db.from('Ognetush').select(`*, ACC (full_name, phone)`).order('next_check_date');
+        // Используем связь с таблицей ACC для получения ФИО
+        let query = _db.from('Ognetush').select('*, ACC(full_name, phone)').order('next_check_date');
         
-        if (search) query = query.eq('shop_name', search);
+        if (search) query = query.ilike('shop_name', `%${search}%`);
 
         const { data, error } = await query;
         if(error) console.error(error);
         renderTable('inspectorTableBody', data, true);
     }
 
-    // --- ОБЩИЙ РЕНДЕР ТАБЛИЦ ---
+    // --- ОБЩИЙ РЕНДЕР ---
     function renderTable(tbodyId, data, isInspector) {
-        if(!data) return;
         const tbody = document.getElementById(tbodyId);
         tbody.innerHTML = '';
+        if(!data || data.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Данных пока нет</td></tr>';
+            return;
+        }
+        
         const today = new Date();
 
         data.forEach(item => {
-            const isExp = item.next_check_date && new Date(item.next_check_date) < today;
+            const nextDate = item.next_check_date ? new Date(item.next_check_date) : null;
+            const isExp = nextDate && nextDate < today;
+            
             let row = `<tr>`;
             if(isInspector) row += `<td><b>${item.shop_name}</b></td>`;
             
             row += `
                 <td><b>${item.type}</b> (№${item.serial_number || '—'})<br><small>${item.location || ''}</small></td>
-                <td class="${isExp ? 'expired' : ''}">${item.next_check_date || '—'}</td>
+                <td class="${isExp ? 'expired' : ''}">${item.next_check_date || 'Не указан'}</td>
             `;
 
             if(isInspector) {
-                const author = item.ACC ? `${item.ACC.full_name}<br><small>📞 ${item.ACC.phone}</small>` : 'Система';
+                const author = item.ACC ? `${item.ACC.full_name}<br><small>📞 ${item.ACC.phone}</small>` : '<span style="color:#999">Неизвестно</span>';
                 row += `<td>${author}</td>`;
             } else {
-                row += `<td>${item.status}</td>`;
+                row += `<td>${isExp ? '❌ Нужна проверка' : '✅ Ок'}</td>`;
             }
             row += `</tr>`;
             tbody.innerHTML += row;
         });
     }
 
-    // Старт
     checkSession();
 </script>
 </body>
