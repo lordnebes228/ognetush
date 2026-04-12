@@ -32,9 +32,9 @@
 </head>
 <body>
 
-<div id="loginSection" class="container section active-section">
+<div id="loginSection" class="container section">
     <h2>🧯 Вход в систему</h2>
-    <input type="text" id="loginEmail" placeholder="Логин (например: ivanov)">
+    <input type="text" id="loginEmail" placeholder="Логин (например: admin)">
     <input type="password" id="loginPass" placeholder="Пароль">
     <button style="background: var(--primary); width: 100%;" onclick="signIn()">ВОЙТИ</button>
 </div>
@@ -49,7 +49,7 @@
     <h2>🛠 Управление персоналом</h2>
     <div class="form-grid" style="background: #f0f7ff; padding: 15px; border-radius: 8px;">
         <input type="text" id="regLogin" placeholder="Логин сотрудника">
-        <input type="password" id="regPass" placeholder="Пароль">
+        <input type="password" id="regPass" placeholder="Новый пароль">
         <input type="text" id="regFullName" placeholder="ФИО полностью">
         <input type="text" id="regPhone" placeholder="Телефон">
         <select id="regRole">
@@ -62,24 +62,26 @@
     </div>
 
     <h3>👥 Список сотрудников</h3>
-    <table id="usersTable">
+    <table>
         <thead><tr><th>Сотрудник</th><th>Роль/Цех</th><th>Действие</th></tr></thead>
         <tbody id="usersTableBody"></tbody>
     </table>
 </div>
 
 <div id="headSection" class="container section">
-    <h2>➕ Добавить огнетушитель</h2>
+    <h2>➕ Регистрация огнетушителя</h2>
     <div class="form-grid">
         <div class="form-group"><label>Наименование:</label><input type="text" id="extName" value="Огнетушитель"></div>
-        <div class="form-group"><label>Тип:</label><select id="extType"><option value="ОП-4">ОП-4</option><option value="ОУ-2">ОУ-2</option><option value="ОУ-5">ОУ-5</option></select></div>
-        <div class="form-group"><label>Инвентарный номер:</label><input type="text" id="extSerial" placeholder="№"></div>
+        <div class="form-group"><label>Тип:</label>
+            <select id="extType"><option value="ОП-4">ОП-4</option><option value="ОУ-2">ОУ-2</option><option value="ОУ-5">ОУ-5</option></select>
+        </div>
+        <div class="form-group"><label>Инвентарный номер:</label><input type="text" id="extSerial"></div>
         <div class="form-group"><label>Вес заряда:</label><input type="text" id="extWeight" placeholder="4 кг"></div>
         <div class="form-group"><label>Дата изготовления:</label><input type="date" id="extProdDate"></div>
         <div class="form-group"><label>Дата последней проверки:</label><input type="date" id="extLastCheck"></div>
         <div class="form-group"><label>Дата следующей проверки:</label><input type="date" id="extNextCheck"></div>
-        <div class="form-group"><label>Место установки:</label><input type="text" id="extLocation" placeholder="Цех №1, блок Б"></div>
-        <button class="btn-save" onclick="saveExtinguisher()">💾 СОХРАНИТЬ В РЕЕСТР</button>
+        <div class="form-group"><label>Место установки:</label><input type="text" id="extLocation"></div>
+        <button class="btn-save" onclick="saveExtinguisher()">💾 СОХРАНИТЬ В БАЗУ</button>
     </div>
     <h3>Ваши огнетушители</h3>
     <table>
@@ -89,8 +91,8 @@
 </div>
 
 <div id="inspectorSection" class="container section">
-    <h2>📋 Общий реестр огнетушителей</h2>
-    <input type="text" id="inspectorSearch" placeholder="🔍 Поиск по названию цеха..." style="width:100%; margin-bottom:15px;" oninput="loadInspectorTable()">
+    <h2>📋 Общий реестр</h2>
+    <input type="text" id="inspectorSearch" placeholder="🔍 Поиск по цеху..." style="width:100%; margin-bottom:15px;" oninput="loadInspectorTable()">
     <table>
         <thead><tr><th>Цех</th><th>Тип/Номер</th><th>Срок</th><th>Место</th></tr></thead>
         <tbody id="inspectorTableBody"></tbody>
@@ -102,13 +104,10 @@
     let currentUser = null;
     const TBL = { ACC: 'acc', DEPTS: 'depts', OGNE: 'ognetush' };
 
-    // --- АВТОРИЗАЦИЯ ---
     async function signIn() {
         let login = document.getElementById('loginEmail').value.trim();
-        if(!login) return alert("Введите логин");
         let email = login.includes('@') ? login : login + "@ssk.local";
         const pass = document.getElementById('loginPass').value;
-        
         const { error } = await _db.auth.signInWithPassword({ email, password: pass });
         if (error) alert("Ошибка: " + error.message);
         else checkSession();
@@ -119,10 +118,7 @@
         if (!session) return switchSection('loginSection');
 
         const { data: profile } = await _db.from(TBL.ACC).select('*').eq('id', session.user.id).single();
-        if (!profile) {
-            alert("Профиль не найден. Возможно, аккаунт был сброшен.");
-            return signOut();
-        }
+        if (!profile) return signOut();
         
         currentUser = profile;
         document.getElementById('appHeader').classList.add('active-section');
@@ -133,37 +129,32 @@
         else if (profile.role === 'Инспектор') { switchSection('inspectorSection'); loadInspectorTable(); }
     }
 
-    function switchSection(id) {
-        document.querySelectorAll('.section').forEach(el => el.classList.remove('active-section'));
-        document.getElementById(id).classList.add('active-section');
-    }
+    // --- ЛОГИКА СБРОСА ПАРОЛЯ ---
+    async function resetUser(id) {
+        // 1. Получаем текущие данные пользователя
+        const { data: user, error } = await _db.from(TBL.ACC).select('*').eq('id', id).single();
+        if (error || !user) return alert("Не удалось найти данные пользователя");
 
-    async function signOut() { await _db.auth.signOut(); location.reload(); }
+        if(!confirm(`Начать процедуру сброса пароля для ${user.username}?\n\nДанные будут подставлены в форму выше, а старый аккаунт удален.`)) return;
 
-    // --- УПРАВЛЕНИЕ ПОЛЬЗОВАТЕЛЯМИ (АДМИН) ---
-    async function loadUsers() {
-        const { data } = await _db.from(TBL.ACC).select('*').order('full_name');
-        document.getElementById('usersTableBody').innerHTML = data.map(u => `
-            <tr>
-                <td><b>${u.full_name}</b><br><small>${u.username}</small></td>
-                <td>${u.role}<br><small>${u.department}</small></td>
-                <td>
-                    <button style="background:#f39c12; padding:4px 8px; font-size:11px;" onclick="resetUser('${u.id}', '${u.username}')">СБРОС ПАРОЛЯ</button>
-                    <button style="background:#c0392b; padding:4px 8px; font-size:11px;" onclick="deleteUser('${u.id}')">УДАЛИТЬ</button>
-                </td>
-            </tr>
-        `).join('');
-    }
+        // 2. Подставляем данные в инпуты формы
+        document.getElementById('regLogin').value = user.username;
+        document.getElementById('regFullName').value = user.full_name;
+        document.getElementById('regPhone').value = user.phone || "";
+        document.getElementById('regRole').value = user.role;
+        document.getElementById('regDept').value = user.department;
+        document.getElementById('regPass').value = ""; // Пароль пустой для ввода нового
+        document.getElementById('regPass').focus();
 
-    async function resetUser(id, login) {
-        if(!confirm(`Сбросить пароль для ${login}? \nАккаунт будет удален из базы. Вы сможете сразу создать его заново с тем же логином и новым паролем.`)) return;
+        // 3. Удаляем старый профиль из таблицы acc
         await _db.from(TBL.ACC).delete().eq('id', id);
-        alert("Аккаунт готов к пересозданию!");
+        
+        alert("Данные перенесены в форму. Введите НОВЫЙ пароль и нажмите 'ЗАРЕГИСТРИРОВАТЬ'.");
         loadUsers();
     }
 
     async function deleteUser(id) {
-        if(!confirm("Удалить сотрудника навсегда?")) return;
+        if(!confirm("Удалить сотрудника?")) return;
         await _db.from(TBL.ACC).delete().eq('id', id);
         loadUsers();
     }
@@ -171,13 +162,13 @@
     async function createUser() {
         const login = document.getElementById('regLogin').value.trim();
         const pass = document.getElementById('regPass').value;
-        if(pass.length < 6) return alert("Пароль должен быть от 6 символов");
+        if(pass.length < 6) return alert("Пароль должен быть минимум 6 символов");
 
-        // 1. Создаем в Auth
+        // Регистрация в Auth
         const { data, error } = await _db.auth.signUp({ email: login + "@ssk.local", password: pass });
-        if(error) return alert("Ошибка: " + error.message);
+        if(error) return alert("Ошибка Auth: " + error.message);
 
-        // 2. Создаем в таблице профилей
+        // Создание в таблице acc
         const { error: pErr } = await _db.from(TBL.ACC).insert([{
             id: data.user.id,
             username: login,
@@ -187,16 +178,30 @@
             department: document.getElementById('regDept').value
         }]);
 
-        if(pErr) alert("Ошибка профиля: " + pErr.message);
-        else { alert("Успешно!"); loadUsers(); }
+        if(pErr) alert("Ошибка таблицы: " + pErr.message);
+        else { alert("Аккаунт успешно создан/обновлен!"); loadUsers(); }
+    }
+
+    async function loadUsers() {
+        const { data } = await _db.from(TBL.ACC).select('*').order('full_name');
+        document.getElementById('usersTableBody').innerHTML = data.map(u => `
+            <tr>
+                <td><b>${u.full_name}</b><br><small>${u.username}</small></td>
+                <td>${u.role}<br><small>${u.department}</small></td>
+                <td>
+                    <button style="background:#f39c12; padding:5px 10px; font-size:11px;" onclick="resetUser('${u.id}')">СБРОС</button>
+                    <button style="background:#c0392b; padding:5px 10px; font-size:11px;" onclick="deleteUser('${u.id}')">УДАЛИТЬ</button>
+                </td>
+            </tr>
+        `).join('');
     }
 
     async function loadDepts() {
         const { data } = await _db.from(TBL.DEPTS).select('name');
-        document.getElementById('regDept').innerHTML = '<option value="Общий">Общий</option>' + data.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
+        const select = document.getElementById('regDept');
+        select.innerHTML = '<option value="Общий">Общий</option>' + data.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
     }
 
-    // --- РАБОТА С ОГНЕТУШИТЕЛЯМИ ---
     async function saveExtinguisher() {
         const payload = {
             name: document.getElementById('extName').value,
@@ -211,8 +216,7 @@
             creator_id: currentUser.id
         };
         const { error } = await _db.from(TBL.OGNE).insert([payload]);
-        if (error) alert(error.message);
-        else { alert("Данные сохранены!"); loadHeadTable(); }
+        if (error) alert(error.message); else { alert("Сохранено!"); loadHeadTable(); }
     }
 
     async function loadHeadTable() {
@@ -221,28 +225,32 @@
     }
 
     async function loadInspectorTable() {
-        const search = document.getElementById('inspectorSearch').value;
-        let query = _db.from(TBL.OGNE).select('*');
-        if(search) query = query.ilike('shop_name', `%${search}%`);
-        const { data } = await query;
+        const s = document.getElementById('inspectorSearch').value;
+        let q = _db.from(TBL.OGNE).select('*');
+        if(s) q = q.ilike('shop_name', `%${s}%`);
+        const { data } = await q;
         renderTable('inspectorTableBody', data, true);
     }
 
-    function renderTable(tbodyId, data, isInspector) {
-        const tbody = document.getElementById(tbodyId);
-        tbody.innerHTML = '';
+    function renderTable(id, data, insp) {
+        const t = document.getElementById(id); t.innerHTML = '';
         const today = new Date();
         data.forEach(i => {
             const isExp = i.next_check_date && new Date(i.next_check_date) < today;
-            tbody.innerHTML += `<tr>
-                ${isInspector ? `<td><b>${i.shop_name}</b></td>` : ''}
-                <td>${i.type} №${i.serial_number}<br><small>${i.name}</small></td>
+            t.innerHTML += `<tr>
+                ${insp ? `<td>${i.shop_name}</td>` : ''}
+                <td>${i.type} №${i.serial_number}</td>
                 <td class="${isExp ? 'expired' : ''}">${i.next_check_date}</td>
-                <td>${isInspector ? i.location : (isExp ? '❌ ПРОВЕРИТЬ' : '✅ ОК')}</td>
+                <td>${insp ? i.location : (isExp ? '❌ СРОК' : '✅ ОК')}</td>
             </tr>`;
         });
     }
 
+    function switchSection(id) {
+        document.querySelectorAll('.section').forEach(el => el.classList.remove('active-section'));
+        document.getElementById(id).classList.add('active-section');
+    }
+    async function signOut() { await _db.auth.signOut(); location.reload(); }
     document.addEventListener('DOMContentLoaded', checkSession);
 </script>
 </body>
