@@ -8,20 +8,22 @@
     <style>
         :root { --primary: #2c3e50; --accent: #e65100; --bg: #f0f2f5; --success: #2e7d32; }
         body { font-family: 'Segoe UI', sans-serif; background: var(--bg); margin: 0; padding: 0; color: #333; }
-        .header { background: var(--primary); color: white; padding: 15px 20px; display: none; justify-content: space-between; align-items: center; }
+        .header { background: var(--primary); color: white; padding: 15px 20px; display: none; justify-content: space-between; align-items: center; box-shadow: 0 2px 5px rgba(0,0,0,0.2); }
         .user-info { font-size: 14px; background: rgba(255,255,255,0.1); padding: 8px 15px; border-radius: 8px; }
         .logout-btn { background: #c0392b; color: white; border: none; padding: 8px 15px; border-radius: 5px; cursor: pointer; }
         .container { max-width: 1000px; margin: 20px auto; background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); }
         h2 { border-bottom: 2px solid var(--accent); padding-bottom: 10px; margin-top: 0; }
         .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 15px; }
         .form-group { display: flex; flex-direction: column; gap: 5px; }
-        input, select { padding: 10px; border: 1px solid #ddd; border-radius: 6px; }
+        input, select { padding: 10px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; }
         button { padding: 12px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; color: white; transition: 0.2s; }
-        .btn-save { background: var(--success); grid-column: span 2; font-size: 16px; }
+        .btn-save { background: var(--success); grid-column: span 2; font-size: 16px; margin-top: 10px; }
         .btn-admin { background: #8e44ad; }
+        .btn-reset { background: #f39c12; padding: 5px 10px; font-size: 11px; }
+        .btn-danger { background: #c0392b; padding: 5px 10px; font-size: 11px; }
         table { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
         th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
-        th { background: #f8f9fa; color: #666; }
+        th { background: #f8f9fa; color: #666; text-transform: uppercase; font-size: 11px; }
         .expired { color: white; font-weight: bold; background: #d32f2f; padding: 2px 5px; border-radius: 4px; }
         .section { display: none !important; }
         .active-section { display: block !important; }
@@ -46,24 +48,37 @@
 </div>
 
 <div id="adminSection" class="container section">
-    <h2>🛠 Управление персоналом</h2>
-    <div class="form-grid" style="background: #f0f7ff; padding: 15px; border-radius: 8px;">
-        <input type="text" id="regLogin" placeholder="Логин сотрудника">
-        <input type="password" id="regPass" placeholder="Новый пароль">
-        <input type="text" id="regFullName" placeholder="ФИО полностью">
-        <input type="text" id="regPhone" placeholder="Телефон">
-        <select id="regRole">
-            <option value="Начальник">Начальник цеха</option>
-            <option value="Инспектор">Инспектор</option>
-            <option value="Админ">Администратор</option>
-        </select>
-        <select id="regDept"><option value="">-- Выберите цех --</option></select>
-        <button class="btn-admin" style="grid-column: span 2;" onclick="createUser()">ЗАРЕГИСТРИРОВАТЬ / ОБНОВИТЬ</button>
+    <h2>🛠 Панель Администратора</h2>
+    
+    <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px solid #eee;">
+        <h3 style="margin-top:0;">🏢 Добавить Подразделение (Цех)</h3>
+        <div style="display:flex; gap:10px;">
+            <input type="text" id="newDeptName" placeholder="Название (например: Цех №1)" style="flex:1;">
+            <select id="newDeptType"><option value="Цех">Цех</option><option value="Отдел">Отдел</option></select>
+            <button class="btn-admin" onclick="addDepartment()">Добавить</button>
+        </div>
+    </div>
+
+    <div style="background: #f0f7ff; padding: 15px; border-radius: 8px; border: 1px solid #e1e8ef;">
+        <h3 style="margin-top:0;">👤 Создать / Сбросить аккаунт</h3>
+        <div class="form-grid">
+            <input type="text" id="regLogin" placeholder="Логин сотрудника">
+            <input type="password" id="regPass" placeholder="Новый пароль">
+            <input type="text" id="regFullName" placeholder="ФИО сотрудника">
+            <input type="text" id="regPhone" placeholder="Телефон">
+            <select id="regRole">
+                <option value="Начальник">Начальник цеха</option>
+                <option value="Инспектор">Инспектор</option>
+                <option value="Админ">Администратор</option>
+            </select>
+            <select id="regDept"><option value="">-- Выберите подразделение --</option></select>
+            <button class="btn-admin" style="grid-column: span 2;" onclick="createUser()">ЗАРЕГИСТРИРОВАТЬ СОТРУДНИКА</button>
+        </div>
     </div>
 
     <h3>👥 Список сотрудников</h3>
     <table>
-        <thead><tr><th>Сотрудник</th><th>Роль/Цех</th><th>Действие</th></tr></thead>
+        <thead><tr><th>Сотрудник</th><th>Роль / Цех</th><th>Действия</th></tr></thead>
         <tbody id="usersTableBody"></tbody>
     </table>
 </div>
@@ -83,15 +98,14 @@
         <div class="form-group"><label>Место установки:</label><input type="text" id="extLocation"></div>
         <button class="btn-save" onclick="saveExtinguisher()">💾 СОХРАНИТЬ В БАЗУ</button>
     </div>
-    <h3>Ваши огнетушители</h3>
-    <table>
-        <thead><tr><th>Тип/Номер</th><th>Заряд</th><th>Срок проверки</th><th>Статус</th></tr></thead>
+    <table style="margin-top:30px;">
+        <thead><tr><th>Тип/Номер</th><th>Заряд</th><th>Срок</th><th>Статус</th></tr></thead>
         <tbody id="headTableBody"></tbody>
     </table>
 </div>
 
 <div id="inspectorSection" class="container section">
-    <h2>📋 Общий реестр</h2>
+    <h2>📋 Общий реестр (Инспектор)</h2>
     <input type="text" id="inspectorSearch" placeholder="🔍 Поиск по цеху..." style="width:100%; margin-bottom:15px;" oninput="loadInspectorTable()">
     <table>
         <thead><tr><th>Цех</th><th>Тип/Номер</th><th>Срок</th><th>Место</th></tr></thead>
@@ -102,7 +116,7 @@
 <script>
     const _db = supabase.createClient('https://gzjoaohbxehyagostffk.supabase.co', 'sb_publishable_BYWEcHFUU1Z41GtZSzmalA_iFiei8jx');
     let currentUser = null;
-    const TBL = { ACC: 'acc', DEPTS: 'depts', OGNE: 'ognetush' };
+    const TBL = { ACC: 'acc', DEPTS: 'depts', OGNE: 'ognetush' }; // Только маленькие буквы!
 
     async function signIn() {
         let login = document.getElementById('loginEmail').value.trim();
@@ -117,8 +131,8 @@
         const { data: { session } } = await _db.auth.getSession();
         if (!session) return switchSection('loginSection');
 
-        const { data: profile } = await _db.from(TBL.ACC).select('*').eq('id', session.user.id).single();
-        if (!profile) return signOut();
+        const { data: profile, error } = await _db.from(TBL.ACC).select('*').eq('id', session.user.id).single();
+        if (error || !profile) return signOut();
         
         currentUser = profile;
         document.getElementById('appHeader').classList.add('active-section');
@@ -129,57 +143,19 @@
         else if (profile.role === 'Инспектор') { switchSection('inspectorSection'); loadInspectorTable(); }
     }
 
-    // --- ЛОГИКА СБРОСА ПАРОЛЯ ---
-    async function resetUser(id) {
-        // 1. Получаем текущие данные пользователя
-        const { data: user, error } = await _db.from(TBL.ACC).select('*').eq('id', id).single();
-        if (error || !user) return alert("Не удалось найти данные пользователя");
-
-        if(!confirm(`Начать процедуру сброса пароля для ${user.username}?\n\nДанные будут подставлены в форму выше, а старый аккаунт удален.`)) return;
-
-        // 2. Подставляем данные в инпуты формы
-        document.getElementById('regLogin').value = user.username;
-        document.getElementById('regFullName').value = user.full_name;
-        document.getElementById('regPhone').value = user.phone || "";
-        document.getElementById('regRole').value = user.role;
-        document.getElementById('regDept').value = user.department;
-        document.getElementById('regPass').value = ""; // Пароль пустой для ввода нового
-        document.getElementById('regPass').focus();
-
-        // 3. Удаляем старый профиль из таблицы acc
-        await _db.from(TBL.ACC).delete().eq('id', id);
-        
-        alert("Данные перенесены в форму. Введите НОВЫЙ пароль и нажмите 'ЗАРЕГИСТРИРОВАТЬ'.");
-        loadUsers();
+    // --- ФУНКЦИИ АДМИНА ---
+    async function addDepartment() {
+        const name = document.getElementById('newDeptName').value.trim();
+        const type = document.getElementById('newDeptType').value;
+        if(!name) return;
+        const { error } = await _db.from(TBL.DEPTS).insert([{ name, type }]);
+        if(error) alert(error.message); else { document.getElementById('newDeptName').value = ''; loadDepts(); }
     }
 
-    async function deleteUser(id) {
-        if(!confirm("Удалить сотрудника?")) return;
-        await _db.from(TBL.ACC).delete().eq('id', id);
-        loadUsers();
-    }
-
-    async function createUser() {
-        const login = document.getElementById('regLogin').value.trim();
-        const pass = document.getElementById('regPass').value;
-        if(pass.length < 6) return alert("Пароль должен быть минимум 6 символов");
-
-        // Регистрация в Auth
-        const { data, error } = await _db.auth.signUp({ email: login + "@ssk.local", password: pass });
-        if(error) return alert("Ошибка Auth: " + error.message);
-
-        // Создание в таблице acc
-        const { error: pErr } = await _db.from(TBL.ACC).insert([{
-            id: data.user.id,
-            username: login,
-            full_name: document.getElementById('regFullName').value,
-            phone: document.getElementById('regPhone').value,
-            role: document.getElementById('regRole').value,
-            department: document.getElementById('regDept').value
-        }]);
-
-        if(pErr) alert("Ошибка таблицы: " + pErr.message);
-        else { alert("Аккаунт успешно создан/обновлен!"); loadUsers(); }
+    async function loadDepts() {
+        const { data } = await _db.from(TBL.DEPTS).select('name');
+        const select = document.getElementById('regDept');
+        select.innerHTML = '<option value="Общий">Общий</option>' + data.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
     }
 
     async function loadUsers() {
@@ -189,19 +165,48 @@
                 <td><b>${u.full_name}</b><br><small>${u.username}</small></td>
                 <td>${u.role}<br><small>${u.department}</small></td>
                 <td>
-                    <button style="background:#f39c12; padding:5px 10px; font-size:11px;" onclick="resetUser('${u.id}')">СБРОС</button>
-                    <button style="background:#c0392b; padding:5px 10px; font-size:11px;" onclick="deleteUser('${u.id}')">УДАЛИТЬ</button>
+                    <button class="btn-reset" onclick="resetUser('${u.id}')">СБРОС</button>
+                    <button class="btn-danger" onclick="deleteUser('${u.id}')">УДАЛИТЬ</button>
                 </td>
             </tr>
         `).join('');
     }
 
-    async function loadDepts() {
-        const { data } = await _db.from(TBL.DEPTS).select('name');
-        const select = document.getElementById('regDept');
-        select.innerHTML = '<option value="Общий">Общий</option>' + data.map(d => `<option value="${d.name}">${d.name}</option>`).join('');
+    async function resetUser(id) {
+        const { data: user } = await _db.from(TBL.ACC).select('*').eq('id', id).single();
+        if(!user) return;
+        document.getElementById('regLogin').value = user.username;
+        document.getElementById('regFullName').value = user.full_name;
+        document.getElementById('regPhone').value = user.phone || "";
+        document.getElementById('regRole').value = user.role;
+        document.getElementById('regDept').value = user.department;
+        await _db.from(TBL.ACC).delete().eq('id', id);
+        alert("Данные перенесены в форму. Введите новый пароль и нажмите 'Зарегистрировать'.");
+        loadUsers();
     }
 
+    async function deleteUser(id) {
+        if(confirm("Удалить сотрудника?")) { await _db.from(TBL.ACC).delete().eq('id', id); loadUsers(); }
+    }
+
+    async function createUser() {
+        const login = document.getElementById('regLogin').value.trim();
+        const pass = document.getElementById('regPass').value;
+        const { data, error } = await _db.auth.signUp({ email: login + "@ssk.local", password: pass });
+        if(error) return alert(error.message);
+
+        await _db.from(TBL.ACC).insert([{
+            id: data.user.id,
+            username: login,
+            full_name: document.getElementById('regFullName').value,
+            phone: document.getElementById('regPhone').value,
+            role: document.getElementById('regRole').value,
+            department: document.getElementById('regDept').value
+        }]);
+        alert("Готово!"); loadUsers();
+    }
+
+    // --- ФУНКЦИИ ТАБЛИЦ ---
     async function saveExtinguisher() {
         const payload = {
             name: document.getElementById('extName').value,
